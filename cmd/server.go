@@ -17,7 +17,10 @@ package cmd
 
 import (
 	"fmt"
+	"github.com/if-nil/wsgo/logger"
+	"net/http"
 
+	"github.com/gorilla/websocket"
 	"github.com/spf13/cobra"
 )
 
@@ -33,7 +36,8 @@ var serverCmd = &cobra.Command{
 	Long: `
 Start a websocket server`,
 	Run: func(cmd *cobra.Command, args []string) {
-		fmt.Println("server called")
+		addr := fmt.Sprintf("%s:%d", bind, port)
+		logger.Fatal(http.ListenAndServe(addr, &server{}))
 	},
 }
 
@@ -42,4 +46,34 @@ func init() {
 
 	serverCmd.Flags().IntVarP(&port, "port", "p", 8080, "Listening Port")
 	serverCmd.Flags().StringVarP(&bind, "bind", "b", "0.0.0.0", "Bind Address")
+}
+
+var upgrader = websocket.Upgrader{
+	CheckOrigin: func(_ *http.Request) bool {
+		return true
+	},
+}
+
+type server struct{}
+
+func (*server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	c, err := upgrader.Upgrade(w, r, nil)
+	if err != nil {
+		logger.Info("upgrade:", err)
+		return
+	}
+	defer c.Close()
+	for {
+		mt, message, err := c.ReadMessage()
+		if err != nil {
+			logger.Error("read:", err)
+			break
+		}
+		logger.Infof("recv: %s", message)
+		err = c.WriteMessage(mt, message)
+		if err != nil {
+			logger.Error("write:", err)
+			break
+		}
+	}
 }
