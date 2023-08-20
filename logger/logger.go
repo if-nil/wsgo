@@ -1,8 +1,24 @@
+/*
+Copyright © 2023 ifNil ifnil.git@gmail.com
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+	http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
 package logger
 
 import (
-	"log"
+	"fmt"
 	"os"
+	"time"
 )
 
 type Level int
@@ -14,88 +30,68 @@ const (
 	ERROR
 	PANIC
 	FATAL
+	TABWRITER
 )
 
+type Logger interface {
+	Println(v ...any)
+	Printf(format string, v ...any)
+}
+
 var (
-	loggers map[Level]*log.Logger
+	defaultLogger Logger
+	prefixMap     = map[Level]string{
+		DEBUG:   "<cyan>[DEBUG]</>",
+		INFO:    "<green>[INFO]</>",
+		WARNING: "<yellow>[WARN]</>",
+		ERROR:   "<red>[ERROR]</>",
+		PANIC:   "<red>[PANIC]</>",
+		FATAL:   "<red>[PANIC]</>",
+	}
 )
 
 func init() {
-	loggers = make(map[Level]*log.Logger)
-	loggers[DEBUG] = log.New(os.Stdout, "[DEBUG]", log.Ltime)
-	loggers[INFO] = log.New(os.Stdout, "[INFO]", log.Ltime)
-	loggers[WARNING] = log.New(os.Stderr, "[WARNING]", log.Ltime)
-	loggers[ERROR] = log.New(os.Stderr, "[ERROR]", log.Ltime)
-	loggers[PANIC] = log.New(os.Stderr, "[PANIC]", log.Ltime)
-	loggers[FATAL] = log.New(os.Stderr, "[FATAL]", log.Ltime)
+	defaultLogger = &colorPrinter{}
 }
 
 func Log(level Level, v ...any) {
 	switch level {
-	case DEBUG, INFO, WARNING, ERROR:
-		loggers[level].Println(v...)
 	case PANIC:
-		loggers[level].Panicln(v...)
+		defaultLogger.Printf("%s %s", time.Now().Format("15:04:05.000"), prefixMap[level])
+		s := fmt.Sprintln(v...)
+		defaultLogger.Println(s)
+		panic(s)
 	case FATAL:
-		loggers[level].Fatalln(v...)
+		defaultLogger.Printf("%s %s", time.Now().Format("15:04:05.000"), prefixMap[level])
+		defaultLogger.Println(v...)
+		os.Exit(1)
+	case TABWRITER:
+		defaultLogger.Println(v...)
+	// case DEBUG, INFO, WARNING, ERROR, TABWRITER:
+	default:
+		defaultLogger.Printf("%s %s", time.Now().Format("15:04:05.000"), prefixMap[level])
+		defaultLogger.Println(v...)
 	}
 }
 
 func Logf(level Level, format string, v ...any) {
+	format = format + "\n"
 	switch level {
-	case DEBUG, INFO, WARNING, ERROR:
-		loggers[level].Printf(format, v...)
 	case PANIC:
-		loggers[level].Panicf(format, v...)
+		defaultLogger.Printf("%s %s", time.Now().Format("15:04:05.000"), prefixMap[level])
+		s := fmt.Sprintf(format, v...)
+		defaultLogger.Printf("[PANIC]")
+		defaultLogger.Printf(s)
+		panic(s)
 	case FATAL:
-		loggers[level].Fatalf(format, v...)
+		defaultLogger.Printf("%s %s", time.Now().Format("15:04:05.000"), prefixMap[level])
+		defaultLogger.Printf(format, v...)
+		os.Exit(1)
+	// case DEBUG, INFO, WARNING, ERROR, TABWRITER:
+	case TABWRITER:
+		defaultLogger.Printf(format, v...)
+	default:
+		defaultLogger.Printf("%s %s", time.Now().Format("15:04:05.000"), prefixMap[level])
+		defaultLogger.Printf(format, v...)
 	}
-}
-
-func Debug(v ...any) {
-	Log(DEBUG, v...)
-}
-
-func Info(v ...any) {
-	Log(INFO, v...)
-}
-
-func Warning(v ...any) {
-	Log(WARNING, v...)
-}
-
-func Error(v ...any) {
-	Log(ERROR, v...)
-}
-
-func Panic(v ...any) {
-	Log(PANIC, v...)
-}
-
-func Fatal(v ...any) {
-	Log(FATAL, v...)
-}
-
-func Debugf(format string, v ...any) {
-	Logf(DEBUG, format, v...)
-}
-
-func Infof(format string, v ...any) {
-	Logf(INFO, format, v...)
-}
-
-func Warningf(format string, v ...any) {
-	Logf(WARNING, format, v...)
-}
-
-func Errorf(format string, v ...any) {
-	Logf(ERROR, format, v...)
-}
-
-func Panicf(format string, v ...any) {
-	Logf(PANIC, format, v...)
-}
-
-func Fatalf(format string, v ...any) {
-	Logf(FATAL, format, v...)
 }
