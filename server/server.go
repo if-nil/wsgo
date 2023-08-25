@@ -4,6 +4,7 @@ import (
 	"github.com/gorilla/websocket"
 	"github.com/if-nil/wsgo/logger"
 	"net/http"
+	"time"
 )
 
 var upgrader = websocket.Upgrader{
@@ -38,6 +39,11 @@ func (s *Server) echo(w http.ResponseWriter, r *http.Request) {
 	defer c.Close()
 	c.SetPingHandler(func(data string) error {
 		logger.RecLog(logger.PingMessage, []byte(data))
+		if err := c.WriteControl(websocket.PongMessage, []byte(data), time.Now().Add(time.Second*10)); err != nil {
+			logger.Error("Write Pong failed", err)
+			c.Close()
+		}
+		logger.SendLog(logger.PongMessage, []byte(data))
 		return nil
 	})
 	c.SetPongHandler(func(data string) error {
