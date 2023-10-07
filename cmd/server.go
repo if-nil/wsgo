@@ -25,8 +25,9 @@ import (
 )
 
 var (
-	port int
-	bind string
+	portArg int
+	bindArg string
+	fileArg string
 )
 
 // serverCmd represents the server command
@@ -36,10 +37,15 @@ var serverCmd = &cobra.Command{
 	Long: `
 Start a websocket server`,
 	Run: func(cmd *cobra.Command, args []string) {
-		addr := fmt.Sprintf("%s:%d", bind, port)
+		addr := fmt.Sprintf("%s:%d", bindArg, portArg)
 		logger.Infof("wsgo server listen at: %s", addr)
+		serverType := server.Echo
+		if fileArg != "" {
+			serverType = server.LuaServer
+		}
 		logger.Fatal(http.ListenAndServe(addr, &server.Server{
-			ServerType: server.Echo,
+			ServerType: serverType,
+			LuaPool:    server.New(fileArg),
 		}))
 	},
 }
@@ -47,6 +53,7 @@ Start a websocket server`,
 func init() {
 	rootCmd.AddCommand(serverCmd)
 
-	serverCmd.Flags().IntVarP(&port, "port", "p", 8080, "Listening Port")
-	serverCmd.Flags().StringVarP(&bind, "bind", "b", "0.0.0.0", "Bind Address")
+	serverCmd.Flags().IntVarP(&portArg, "port", "p", 8080, "Listening Port")
+	serverCmd.Flags().StringVarP(&bindArg, "bind", "b", "0.0.0.0", "Bind Address")
+	serverCmd.Flags().StringVarP(&fileArg, "file", "f", "", "lua plugin file")
 }

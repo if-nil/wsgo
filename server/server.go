@@ -3,6 +3,7 @@ package server
 import (
 	"github.com/gorilla/websocket"
 	"github.com/if-nil/wsgo/logger"
+	lua "github.com/yuin/gopher-lua"
 	"net/http"
 	"time"
 )
@@ -17,16 +18,20 @@ type ServerType int
 
 const (
 	Echo ServerType = iota
+	LuaServer
 )
 
 type Server struct {
 	ServerType ServerType
+	LuaPool    *LStatePool
 }
 
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	switch s.ServerType {
 	case Echo:
 		s.echo(w, r)
+	case LuaServer:
+		s.luaServer(w, r)
 	}
 }
 
@@ -64,4 +69,37 @@ func (s *Server) echo(w http.ResponseWriter, r *http.Request) {
 		}
 		logger.SendLog(mt, message)
 	}
+}
+
+func (s *Server) luaServer(w http.ResponseWriter, r *http.Request) {
+	// upgrade_callback
+	// handler
+	l := s.LuaPool.Get()
+	defer s.LuaPool.Put(l)
+
+	var header http.Header = nil
+
+	upgradeFn := l.GetGlobal("upgrade_callback")
+	if upgradeFn.Type() != lua.LTNil {
+		if err := l.CallByParam(lua.P{
+			Fn:      upgradeFn,
+			NRet:    1,
+			Protect: true,
+		}, &lua.LTable{}); err != nil {
+			logger.Error(err)
+			return
+		}
+		v := l.Get(-1) // returned value
+		l.Pop(1)       // remove received value
+		if v, ok := v.(lua.LBool); !ok || !bool(v) {
+			logger.Infof("could not upgrade to a websocket connection")
+			return
+		}
+	}
+	c, err := upgrader.Upgrade(w, r, header)
+	if err != nil {
+		logger.Error(err)
+		return
+	}
+	defer c.Close()
 }
