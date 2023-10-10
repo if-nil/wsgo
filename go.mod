@@ -7,6 +7,7 @@ require (
 	github.com/gorilla/websocket v1.5.0
 	github.com/spf13/cobra v1.7.0
 	github.com/yuin/gopher-lua v1.1.0
+	layeh.com/gopher-luar v1.0.11
 )
 
 require (

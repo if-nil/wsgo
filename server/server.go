@@ -1,9 +1,25 @@
+/*
+Copyright © 2023 ifNil ifnil.git@gmail.com
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+	http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
 package server
 
 import (
 	"github.com/gorilla/websocket"
 	"github.com/if-nil/wsgo/logger"
 	lua "github.com/yuin/gopher-lua"
+	luar "layeh.com/gopher-luar"
 	"net/http"
 	"time"
 )
@@ -78,22 +94,23 @@ func (s *Server) luaServer(w http.ResponseWriter, r *http.Request) {
 	defer s.LuaPool.Put(l)
 
 	var header http.Header = nil
-
-	upgradeFn := l.GetGlobal("upgrade_callback")
-	if upgradeFn.Type() != lua.LTNil {
-		if err := l.CallByParam(lua.P{
-			Fn:      upgradeFn,
-			NRet:    1,
-			Protect: true,
-		}, &lua.LTable{}); err != nil {
-			logger.Error(err)
-			return
-		}
-		v := l.Get(-1) // returned value
-		l.Pop(1)       // remove received value
-		if v, ok := v.(lua.LBool); !ok || !bool(v) {
-			logger.Infof("could not upgrade to a websocket connection")
-			return
+	m := l.GetGlobal("M")
+	if m.Type() != lua.LTNil {
+		if upgradeFn := l.GetField(m, "upgrade_callback"); upgradeFn.Type() != lua.LTNil {
+			if err := l.CallByParam(lua.P{
+				Fn:      upgradeFn,
+				NRet:    1,
+				Protect: true,
+			}, luar.New(l, NewContext(r))); err != nil {
+				logger.Error(err)
+				return
+			}
+			v := l.Get(-1) // returned value
+			l.Pop(1)       // remove received value
+			if v, ok := v.(lua.LBool); !ok || !bool(v) {
+				logger.Infof("could not upgrade to a websocket connection")
+				return
+			}
 		}
 	}
 	c, err := upgrader.Upgrade(w, r, header)
